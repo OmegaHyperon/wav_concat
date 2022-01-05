@@ -1,0 +1,7 @@
+{
+    "descr": "lib of morfs", 
+    "data": [
+        {"morf": "beep", "file": "./beep.wav"}, 
+        {"morf": "beeperr", "file": "./beeperr.wav"}
+    ]
+}
