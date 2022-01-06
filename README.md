@@ -8,7 +8,7 @@
         {"morf": "beep", "file": "./beep.wav"}, 
         {"morf": "beeperr", "file": "./beeperr.wav"}
     ]
-}```
+}```  
 - набор файлов, описанных в lib_morf.dat
 
 Запрос генерации файлов:  
