@@ -25,8 +25,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/youpy/go-wav"
@@ -44,10 +44,11 @@ import (
 type TFormula []string
 
 type TInitSynth struct {
-	PathLibMorf string
-	PathResult  string
-	ErrorLog    *log.Logger
-	InfoLog     *log.Logger
+	PathLibMorf string      //
+	SaveResult  int         // Сохранять результат синтеза в файл
+	PathResult  string      //
+	ErrorLog    *log.Logger //
+	InfoLog     *log.Logger //
 }
 
 // Объект синтезатор речи
@@ -57,16 +58,18 @@ type Synthesizer struct {
 	bitsPerSample   uint16 // ~
 	pathLibMorfFile string // Имя файла словаря
 	pathLibMorf     string // Путь к словарю и к файлам со звуками
+	saveResult      int    // Сохранять результат синтеза
 	pathResult      string // Путь для записи результирующих файлов
 
-	errorLog      	*log.Logger
-	infoLog       	*log.Logger
+	errorLog *log.Logger
+	infoLog  *log.Logger
 
-	morphemesJSON 	string
-	formula       	[]string            // Правило для синтеза речи
-	morphemes     	map[string]*os.File // Словарь содержащий файлы для каждой фонемы
-	wav_bytes     	map[string][]wav.Sample
-	res           	[]wav.Sample // Результат обработки
+	morphemesJSON string
+	formula       []string                // Правило для синтеза речи
+	morphemes     map[string]*os.File     // Словарь содержащий файлы для каждой фонемы
+	wavBytes      map[string][]wav.Sample //
+	res           []wav.Sample            // Результат обработки
+	ResFName      string                  // Полный путь к результирующему файлу
 }
 
 // Загрузка всех доступных морфем в словарь
@@ -74,7 +77,7 @@ type Synthesizer struct {
 func (p *Synthesizer) loadMorphemes() bool {
 	lres := true
 	p.morphemes = make(map[string]*os.File)
-	p.wav_bytes = make(map[string][]wav.Sample)
+	p.wavBytes = make(map[string][]wav.Sample)
 
 	lmfj := []byte(p.morphemesJSON)
 
@@ -105,7 +108,7 @@ func (p *Synthesizer) loadMorphemes() bool {
 				lres = false
 				break
 			}
-			p.wav_bytes[idt1["morf"].(string)] = smpld
+			p.wavBytes[idt1["morf"].(string)] = smpld
 		}
 
 		p.infoLog.Println(">>> Morphemes: ", p.morphemes)
@@ -158,7 +161,7 @@ func (p *Synthesizer) assemble() bool {
 	p.infoLog.Println("Assemble the formula...")
 
 	for _, i_word := range p.formula {
-		res_data = append(res_data, p.wav_bytes[i_word]...)
+		res_data = append(res_data, p.wavBytes[i_word]...)
 	}
 
 	p.res = res_data
@@ -169,11 +172,10 @@ func (p *Synthesizer) assemble() bool {
 // Запись файла с результатом сборки данных
 func (p *Synthesizer) saveFile(resFName string) bool {
 	lres := true
-	lfname := filepath.Join(p.pathResult, fmt.Sprintf("%s.wav", resFName))
+	p.ResFName = filepath.Join(p.pathResult, fmt.Sprintf("%s.wav", resFName))
 
-	file3, _ := os.Create(lfname)
-	ln := uint32(len(p.res))
-	wrtr := wav.NewWriter(file3, ln, p.numChannels, p.sampleRate, p.bitsPerSample)
+	lfile, _ := os.Create(p.ResFName)
+	wrtr := wav.NewWriter(lfile, uint32(len(p.res)), p.numChannels, p.sampleRate, p.bitsPerSample)
 
 	errw := wrtr.WriteSamples(p.res)
 	if errw != nil {
@@ -181,13 +183,25 @@ func (p *Synthesizer) saveFile(resFName string) bool {
 		lres = false
 	}
 
-	defer file3.Close()
+	defer lfile.Close()
 
 	if lres {
-		p.infoLog.Println("File is saved: ", lfname)
+		p.infoLog.Println(">>> File is saved: ", p.ResFName)
 	}
 
 	return lres
+}
+
+// Запись наружу с результатом сборки данных
+func (p *Synthesizer) SaveStream(w io.Writer) {
+	wrtr := wav.NewWriter(w, uint32(len(p.res)), p.numChannels, p.sampleRate, p.bitsPerSample)
+	errw := wrtr.WriteSamples(p.res)
+	if errw != nil {
+		p.errorLog.Println("!!! saveStream: Error of writing data: ", errw)
+	} else {
+		p.infoLog.Println(">>> saveStream: Stream is saved")
+	}
+
 }
 
 func (p *Synthesizer) Init(data TInitSynth) {
@@ -198,7 +212,8 @@ func (p *Synthesizer) Init(data TInitSynth) {
 	p.pathLibMorfFile = "lib_morf.dat"
 
 	p.pathLibMorf = data.PathLibMorf // "./lib/"
-	p.pathResult = data.PathResult   // "./result/"
+	p.saveResult = data.SaveResult
+	p.pathResult = data.PathResult // "./result/"
 	p.infoLog = data.InfoLog
 	p.errorLog = data.ErrorLog
 }
@@ -216,12 +231,16 @@ func (p *Synthesizer) Run(formu string, fname string) bool {
 	p.infoLog.Println("Start of the server...")
 
 	lres := false
-	if p.pathLibMorf != "" && p.pathResult != "" && p.infoLog != nil && p.errorLog != nil  {
+	if p.pathLibMorf != "" && p.pathResult != "" && p.infoLog != nil && p.errorLog != nil {
 		if p.openLibMorfs() {
 			if p.loadFormula(formu) {
 				if p.loadMorphemes() {
 					if p.assemble() {
-						if p.saveFile(fname) {
+						if p.saveResult == 1 {
+							if p.saveFile(fname) {
+								lres = true
+							}
+						} else {
 							lres = true
 						}
 					}
@@ -229,7 +248,7 @@ func (p *Synthesizer) Run(formu string, fname string) bool {
 			}
 		}
 	} else {
-		fmt.Println("!!! Synthesizer wasn't fully inited.")
+		fmt.Println("!!! Synthesizer wasn't fully inited")
 	}
 
 	return lres

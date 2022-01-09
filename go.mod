@@ -1,11 +1,10 @@
-module simple_api_golang
+module wav_concat
 
 go 1.16
 
 require (
-	github.com/godror/godror v0.29.0
+	github.com/godror/godror v0.30.1
 	github.com/jmoiron/sqlx v1.3.4
-	github.com/stretchr/testify v1.7.0 // indirect
-	github.com/youpy/go-wav v0.3.0 // indirect
+	github.com/youpy/go-wav v0.3.0
 	gopkg.in/ini.v1 v1.66.2
 )

@@ -11,6 +11,7 @@ conn_str = 127.0.0.1:1521/dbname
 
 [SYNTH]
 libdir = ./lib/
+saveresult = 0
 resultdir = ./result/
 
 */
@@ -33,8 +34,9 @@ type ConfUtil struct {
 	DB_password string
 	DB_conn     string
 
-	Synth_libdir    string
-	Synth_resultdir string
+	Synth_libdir     string
+	Synth_saveresult int
+	Synth_resultdir  string
 }
 
 func (p *ConfUtil) LoadIniFile() int {
@@ -55,6 +57,10 @@ func (p *ConfUtil) LoadIniFile() int {
 	p.DB_conn = cfg.Section("DB").Key("conn_str").String()
 
 	p.Synth_libdir = cfg.Section("SYNTH").Key("libdir").String()
+	p.Synth_saveresult, err = cfg.Section("SYNTH").Key("saveresult").Int()
+	if err != nil {
+		p.Synth_saveresult = 0
+	}
 	p.Synth_resultdir = cfg.Section("SYNTH").Key("resultdir").String()
 
 	fmt.Println("Port: ", p.Port)
@@ -62,6 +68,7 @@ func (p *ConfUtil) LoadIniFile() int {
 	fmt.Println("DB_conn: ", p.DB_conn)
 
 	fmt.Println("synth_libdir: ", p.Synth_libdir)
+	fmt.Println("synth_saveresult: ", p.Synth_saveresult)
 	fmt.Println("synth_resultdir: ", p.Synth_resultdir)
 
 	return 1

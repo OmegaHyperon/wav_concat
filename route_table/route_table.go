@@ -32,15 +32,9 @@ func (p *RoTable) newRoute(method, pattern string, handler http.HandlerFunc) rou
 
 func (p *RoTable) Init(
 	echoString http.HandlerFunc,
-	randDigit http.HandlerFunc,
-	incrementCounter http.HandlerFunc,
-	headersString http.HandlerFunc,
 	dataPost http.HandlerFunc,
 ) {
 	p.echoString = echoString
-	p.randDigit = randDigit
-	p.incrementCounter = incrementCounter
-	p.randDigit = randDigit
 	p.dataPost = dataPost
 
 	p.routes = []route{

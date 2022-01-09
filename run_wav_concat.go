@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"simple_api_golang/conf_util"
-	"simple_api_golang/ora_conn"
-	"simple_api_golang/route_table"
-	"simple_api_golang/synth"
 	"strconv"
 	"sync"
+	"wav_concat/conf_util"
+	"wav_concat/ora_conn"
+	"wav_concat/route_table"
+	"wav_concat/synth"
 
 	_ "github.com/godror/godror"
 )
@@ -64,41 +63,15 @@ func (a *application) prepareResp(status string, res string, msg string) string 
 	return string(jtRespData)
 }
 
-func (a *application) headersString(w http.ResponseWriter, r *http.Request) {
-	a.infoLog.Printf(">>> Start of headersString...")
-	w.Header().Set("MYHEADER", "AAABBBCCCDDDEEEFFFGGG")
-	a.infoLog.Printf(">>> List of headers: %s\n", a.headers(r))
-	fmt.Fprintln(w, a.headers(r))
-}
-
 func (a *application) echoString(w http.ResponseWriter, r *http.Request) {
 	a.infoLog.Printf(">>> Start of echoString...")
 	w.Header().Set("MYHEADER", "AAABBBCCCDDDEEEFFFGGG")
 	fmt.Fprintf(w, "hello\n\n")
 }
 
-func (a *application) incrementCounter(w http.ResponseWriter, r *http.Request) {
-	a.infoLog.Printf(">>> Start of incrementCounter...")
-	a.mutex.Lock()
-	a.counter++
-
-	w.Header().Set("MYHEADER", "AAABBBCCCDDDEEEFFFGGG")
-	fmt.Fprintf(w, a.prepareResp("OK", strconv.Itoa(a.counter), ""))
-	// w.Write([]byte("ABCD"))
-
-	a.mutex.Unlock()
-}
-
-func (a *application) randDigit(w http.ResponseWriter, r *http.Request) {
-	a.infoLog.Printf(">>> Start of randDigit...")
-	w.Header().Set("MYHEADER", "AAABBBCCCDDDEEEFFFGGG")
-	fmt.Fprintf(w, a.prepareResp("OK", strconv.Itoa(rand.Intn(100)), ""))
-}
-
 // Обработка команды /data
 func (a *application) dataPost(w http.ResponseWriter, r *http.Request) {
 	a.infoLog.Printf(">>> Start of dataPost...")
-	w.Header().Set("MYHEADER", "AAABBBCCCDDDEEEFFFGGG")
 
 	lbody, lerr := io.ReadAll(r.Body)
 	if lerr != nil {
@@ -130,7 +103,10 @@ func (a *application) dataPost(w http.ResponseWriter, r *http.Request) {
 
 		a.infoLog.Println("Result of run: ", lres)
 		if lres {
-			fmt.Fprintf(w, a.prepareResp("OK", "NoData", ""))
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("RESULTFNAME", lfname)
+			lsyn.SaveStream(w)
 		} else {
 			fmt.Fprintf(w, a.prepareResp("ERROR", "NoData", ""))
 		}
@@ -138,7 +114,7 @@ func (a *application) dataPost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Тест подключения к БД 
+// Тест подключения к БД
 func (a *application) testOracle() {
 	ora_conn.ConnectToOracle(a.conf.DB_username, a.conf.DB_password, a.conf.DB_conn)
 	fmt.Println(">>> End of ConnectToOracle")
@@ -178,14 +154,11 @@ func main() {
 	appl.rotable = &route_table.RoTable{}
 	(*appl.rotable).Init(
 		appl.echoString,
-		appl.randDigit,
-		appl.incrementCounter,
-		appl.randDigit,
-		appl.dataPost,
-	)
+		appl.dataPost)
 
 	// Init for synthesizer
 	appl.synthInitData.PathLibMorf = appl.conf.Synth_libdir
+	appl.synthInitData.SaveResult = appl.conf.Synth_saveresult
 	appl.synthInitData.PathResult = appl.conf.Synth_resultdir
 	appl.synthInitData.InfoLog = appl.infoLog
 	appl.synthInitData.ErrorLog = appl.errorLog
