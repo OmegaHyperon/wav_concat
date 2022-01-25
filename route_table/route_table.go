@@ -39,9 +39,9 @@ func (p *RoTable) Init(
 
 	p.routes = []route{
 		p.newRoute("GET",  "/", p.echoString),
-		p.newRoute("GET",  "/rand", p.randDigit),
-		p.newRoute("GET",  "/inc", p.incrementCounter),
-		p.newRoute("GET",  "/headers", p.headersString),
+		// p.newRoute("GET",  "/rand", p.randDigit),
+		// p.newRoute("GET",  "/inc", p.incrementCounter),
+		// p.newRoute("GET",  "/headers", p.headersString),
 		p.newRoute("POST", "/data", p.dataPost),
 	}
 }
