@@ -11,7 +11,11 @@ conn_str = 127.0.0.1:1521/dbname
 
 [SYNTH]
 libdir = ./lib/
+
+; Запись созданного файла в хранилище
 saveresult = 0
+
+; Хранилище для созданных файлов
 resultdir = ./result/
 
 */
@@ -20,12 +24,15 @@ package conf_util
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 
 	"gopkg.in/ini.v1"
 )
 
 type ConfUtil struct {
+	Version  string
 	ini_path string
 	Port     int
 	LogFile  string
@@ -37,16 +44,55 @@ type ConfUtil struct {
 	Synth_libdir     string
 	Synth_saveresult int
 	Synth_resultdir  string
+
+	ErrorLog *log.Logger
+	InfoLog  *log.Logger
 }
 
-func (p *ConfUtil) LoadIniFile() int {
+func (p *ConfUtil) saveLogInfo(msg ...string) {
+	if p.InfoLog != nil {
+		p.InfoLog.Printf(msg[0])
+	} else {
+		fmt.Println(msg[0])
+	}
+}
+
+func (p *ConfUtil) saveLogError(msg string) {
+	if p.ErrorLog != nil {
+		p.ErrorLog.Println(msg[0])
+	} else {
+		fmt.Println(msg[0])
+	}
+}
+
+func (p *ConfUtil) loadVersionFile() string {
+	lverfpath := "./version"
+	lverf, lerr := os.Open(lverfpath)
+	if lerr != nil {
+		fmt.Println("Не найден файл с версией проекта: ", lverfpath)
+		panic("Version file is'nt found")
+	}
+	verb, lerr2 := ioutil.ReadAll(lverf)
+	if lerr2 != nil {
+		fmt.Println("Не найден файл с версией проекта: ", lverfpath)
+		panic("Version file is'nt found")
+	}
+
+	p.Version = string(verb)
+
+	return p.Version
+}
+
+func (p *ConfUtil) LoadIniFile() {
+	p.loadVersionFile()
+
 	p.ini_path = "/usr/local/etc/simple_api_golang/simple_api_golang.ini"
 	p.LogFile = "./logs/simple_api_golang.log"
 
-	fmt.Println("Path to ini-file:", p.ini_path)
+	p.saveLogInfo("Path to ini-file: " + p.ini_path)
 	cfg, err := ini.Load(p.ini_path)
 	if err != nil {
-		fmt.Println("Fail to read file:", p.ini_path, err)
+		p.saveLogError("Fail to read file: " + p.ini_path + err.Error())
 		os.Exit(1)
 	}
 
@@ -62,14 +108,4 @@ func (p *ConfUtil) LoadIniFile() int {
 		p.Synth_saveresult = 0
 	}
 	p.Synth_resultdir = cfg.Section("SYNTH").Key("resultdir").String()
-
-	fmt.Println("Port: ", p.Port)
-	fmt.Println("DB_username: ", p.DB_username)
-	fmt.Println("DB_conn: ", p.DB_conn)
-
-	fmt.Println("synth_libdir: ", p.Synth_libdir)
-	fmt.Println("synth_saveresult: ", p.Synth_saveresult)
-	fmt.Println("synth_resultdir: ", p.Synth_resultdir)
-
-	return 1
 }

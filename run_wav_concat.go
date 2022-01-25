@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"wav_concat/conf_util"
+	"wav_concat/gcollect"
 	"wav_concat/ora_conn"
 	"wav_concat/route_table"
 	"wav_concat/synth"
@@ -32,10 +33,13 @@ type application struct {
 	counter       int
 	mutex         *sync.Mutex
 	conf          *conf_util.ConfUtil
-	errorLog      *log.Logger
-	infoLog       *log.Logger
 	rotable       *route_table.RoTable
 	synthInitData synth.TInitSynth
+	gcollect      *gcollect.GCollect
+	oraConn       *ora_conn.OraConn
+
+	infoLog  *log.Logger
+	errorLog *log.Logger
 }
 
 func (a *application) headers(req *http.Request) string {
@@ -114,10 +118,32 @@ func (a *application) dataPost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Тест подключения к БД
-func (a *application) testOracle() {
-	ora_conn.ConnectToOracle(a.conf.DB_username, a.conf.DB_password, a.conf.DB_conn)
-	fmt.Println(">>> End of ConnectToOracle")
+func (a *application) saveLogInfo(msg ...string) {
+	if a.infoLog != nil {
+		a.infoLog.Printf(msg[0])
+	} else {
+		fmt.Println(msg[0])
+	}
+}
+
+func (a *application) saveLogError(msg string) {
+	if a.errorLog != nil {
+		a.errorLog.Println(msg[0])
+	} else {
+		fmt.Println(msg[0])
+	}
+}
+
+func (a *application) initPrint() {
+	a.saveLogInfo("Version: " + a.conf.Version)
+
+	a.saveLogInfo(fmt.Sprintf("Port: %d", a.conf.Port))
+	a.saveLogInfo("DB_username: " + a.conf.DB_username)
+	a.saveLogInfo("DB_conn: " + a.conf.DB_conn)
+
+	a.saveLogInfo("Synth_libdir: " + a.conf.Synth_libdir)
+	a.saveLogInfo(fmt.Sprintf("Synth_saveresult: %d", a.conf.Synth_saveresult))
+	a.saveLogInfo("Synth_resultdir: " + a.conf.Synth_resultdir)
 }
 
 // Main
@@ -147,6 +173,10 @@ func main() {
 	// названия файла и номера строки где обнаружилась ошибка.
 	appl.errorLog = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
+	appl.conf.InfoLog = appl.infoLog
+	appl.conf.ErrorLog = appl.errorLog
+	appl.initPrint()
+
 	appl.mutex = &sync.Mutex{}
 	appl.counter = 0
 
@@ -156,18 +186,27 @@ func main() {
 		appl.echoString,
 		appl.dataPost)
 
+	appl.infoLog.Printf(">>> Test of Oracle...")
+	appl.oraConn = &ora_conn.OraConn{
+		Username: appl.conf.DB_username, 
+		Password: appl.conf.DB_password, 
+		Database: appl.conf.DB_conn, 
+	
+		InfoLog:  appl.infoLog,
+		ErrorLog: appl.errorLog,	
+	}
+	appl.oraConn.ConnectToOracle()
+
 	// Init for synthesizer
 	appl.synthInitData.PathLibMorf = appl.conf.Synth_libdir
 	appl.synthInitData.SaveResult = appl.conf.Synth_saveresult
 	appl.synthInitData.PathResult = appl.conf.Synth_resultdir
 	appl.synthInitData.InfoLog = appl.infoLog
 	appl.synthInitData.ErrorLog = appl.errorLog
+	appl.synthInitData.OraConn = appl.oraConn
 
 	appl.infoLog.Printf("Start of the server...")
 	// appl.errorLog.Printf("No errors at start!")
-
-	appl.infoLog.Printf(">>> Test of Oracle...")
-	appl.testOracle()
 
 	// With Mux...
 	// mux := http.NewServeMux()
@@ -184,6 +223,17 @@ func main() {
 	// 	Handler:  mux,
 	// }
 	// fmt.Println(">>> ", serv_url, appl.conf.Port)
+
+	appl.gcollect = &gcollect.GCollect{
+		Is_stopped: 0,
+		Ext:        "wav",
+		PathDir:    "./result/",
+		TimeOut:    600,
+
+		InfoLog:  appl.infoLog,
+		ErrorLog: appl.errorLog,
+	}
+	go appl.gcollect.StartLoop()
 
 	router := http.HandlerFunc(appl.rotable.Serve)
 	errserv := http.ListenAndServe(fmt.Sprintf(":%d", appl.conf.Port), router)

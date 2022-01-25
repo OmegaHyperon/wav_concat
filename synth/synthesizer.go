@@ -28,6 +28,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"wav_concat/ora_conn"
 
 	"github.com/youpy/go-wav"
 )
@@ -49,6 +50,7 @@ type TInitSynth struct {
 	PathResult  string      //
 	ErrorLog    *log.Logger //
 	InfoLog     *log.Logger //
+	OraConn     *ora_conn.OraConn
 }
 
 // Объект синтезатор речи
@@ -70,6 +72,24 @@ type Synthesizer struct {
 	wavBytes      map[string][]wav.Sample //
 	res           []wav.Sample            // Результат обработки
 	ResFName      string                  // Полный путь к результирующему файлу
+
+	oraConn       *ora_conn.OraConn
+}
+
+func (p *Synthesizer) saveLogInfo(msg ...string) {
+	if p.infoLog != nil {
+		p.infoLog.Printf("Synthesizer: %q\n", msg)
+	} else {
+		fmt.Printf("Synthesizer: %q\n", msg)
+	}
+}
+
+func (p *Synthesizer) saveLogError(msg ...string) {
+	if p.errorLog != nil {
+		p.errorLog.Printf("Synthesizer: %q\n", msg)
+	} else {
+		fmt.Printf("Synthesizer: %q\n", msg)
+	}
 }
 
 // Загрузка всех доступных морфем в словарь
@@ -83,9 +103,9 @@ func (p *Synthesizer) loadMorphemes() bool {
 
 	var dat map[string]interface{}
 	if err := json.Unmarshal(lmfj, &dat); err != nil {
-		p.errorLog.Printf("!!! Error in loadMorphemes: %s\n", err)
+		p.saveLogError("!!! Error in loadMorphemes: %s\n", err.Error())
 	}
-	p.infoLog.Println("Morphemes: ", dat)
+	p.saveLogInfo(fmt.Sprintf("Morphemes: %v", dat))
 	dat1 := dat["data"].([]interface{})
 
 	// https://gobyexample.com/json
@@ -94,24 +114,24 @@ func (p *Synthesizer) loadMorphemes() bool {
 
 		fhndl, errf := os.Open(p.pathLibMorf + idt1["file"].(string))
 		if errf != nil {
-			p.errorLog.Printf("!!! Error of opening file: %s, %s\n", idt1["file"].(string), errf)
+			p.saveLogError("!!! Error of opening file: ", idt1["file"].(string), errf.Error())
 			lres = false
 			break
 		} else {
-			p.infoLog.Println(">>> File is opened: ", idt1["file"].(string))
+			p.saveLogInfo(">>> File is opened: ", idt1["file"].(string))
 			defer fhndl.Close()
 
 			p.morphemes[idt1["morf"].(string)] = fhndl
 			smpld, errs := wav.NewReader(fhndl).ReadSamples()
 			if errs == io.EOF {
-				p.errorLog.Println("!!! Error of ReadSamples: ", idt1["morf"].(string))
+				p.saveLogError("!!! Error of ReadSamples: ", idt1["morf"].(string))
 				lres = false
 				break
 			}
 			p.wavBytes[idt1["morf"].(string)] = smpld
 		}
 
-		p.infoLog.Println(">>> Morphemes: ", p.morphemes)
+		p.saveLogInfo(fmt.Sprintf(">>> Morphemes: %v", p.morphemes))
 	}
 
 	return lres
@@ -123,7 +143,7 @@ func (p *Synthesizer) openLibMorfs() bool {
 
 	file, err := os.Open(lfname)
 	if err != nil {
-		p.errorLog.Printf("!!! Error in openLibMorfs: %s", err)
+		p.saveLogError("!!! Error in openLibMorfs: %s", err.Error())
 	}
 	defer file.Close()
 
@@ -137,7 +157,7 @@ func (p *Synthesizer) openLibMorfs() bool {
 		p.morphemesJSON += string(ldata[:n])
 	}
 
-	p.infoLog.Println(">>> Lib of morphemes was loaded: ", lfname)
+	p.saveLogInfo(">>> Lib of morphemes was loaded: ", lfname)
 
 	return lres
 }
@@ -149,7 +169,7 @@ func (p *Synthesizer) loadFormula(formulaJSON string) bool {
 		panic(err)
 	}
 	p.formula = dat
-	p.infoLog.Println(">>> Fomula is loaded: ", p.formula)
+	p.saveLogInfo(fmt.Sprintf(">>> Fomula is loaded: %v", p.formula))
 
 	return true
 }
@@ -158,7 +178,7 @@ func (p *Synthesizer) loadFormula(formulaJSON string) bool {
 func (p *Synthesizer) assemble() bool {
 	var res_data []wav.Sample
 
-	p.infoLog.Println("Assemble the formula...")
+	p.saveLogInfo("Assemble the formula...")
 
 	for _, i_word := range p.formula {
 		res_data = append(res_data, p.wavBytes[i_word]...)
@@ -179,14 +199,14 @@ func (p *Synthesizer) saveFile(resFName string) bool {
 
 	errw := wrtr.WriteSamples(p.res)
 	if errw != nil {
-		p.errorLog.Println("!!! Error of writing data: ", errw)
+		p.saveLogError("!!! Error of writing data: ", errw.Error())
 		lres = false
 	}
 
 	defer lfile.Close()
 
 	if lres {
-		p.infoLog.Println(">>> File is saved: ", p.ResFName)
+		p.saveLogInfo(">>> File is saved: ", p.ResFName)
 	}
 
 	return lres
@@ -197,9 +217,9 @@ func (p *Synthesizer) SaveStream(w io.Writer) {
 	wrtr := wav.NewWriter(w, uint32(len(p.res)), p.numChannels, p.sampleRate, p.bitsPerSample)
 	errw := wrtr.WriteSamples(p.res)
 	if errw != nil {
-		p.errorLog.Println("!!! saveStream: Error of writing data: ", errw)
+		p.saveLogError("!!! saveStream: Error of writing data: ", errw.Error())
 	} else {
-		p.infoLog.Println(">>> saveStream: Stream is saved")
+		p.saveLogInfo(">>> saveStream: Stream is saved")
 	}
 
 }
@@ -216,21 +236,23 @@ func (p *Synthesizer) Init(data TInitSynth) {
 	p.pathResult = data.PathResult // "./result/"
 	p.infoLog = data.InfoLog
 	p.errorLog = data.ErrorLog
+	p.oraConn = data.OraConn
 }
 
+// Главный обработчик
+// Обрабатывает формулу и генерирует файл с результирующей записью
+//
+// lformu := "[\"welcone\", \"silence/1\", \"one\", \"silence/1\", \"end\"]"
+// lformu = "[\"beep\", \"beeperr\", \"beep\", \"beeperr\"]"
+// Словарь фонем
+// lmorf := "{\"descr\": \"DDDDD\", \"data\": [{\"morf\": \"beep\", \"file\": \"./beep.wav\"}, {\"morf\": \"beeperr\", \"file\": \"beeperr.wav\"}]}"
+// syn := Synthesizer{}
 func (p *Synthesizer) Run(formu string, fname string) bool {
-	// Главный обработчик
-	// Обрабатывает формулу и генерирует файл с результирующей записью
-	//
-	// lformu := "[\"welcone\", \"silence/1\", \"one\", \"silence/1\", \"end\"]"
-	// lformu = "[\"beep\", \"beeperr\", \"beep\", \"beeperr\"]"
-	// Словарь фонем
-	// lmorf := "{\"descr\": \"DDDDD\", \"data\": [{\"morf\": \"beep\", \"file\": \"./beep.wav\"}, {\"morf\": \"beeperr\", \"file\": \"beeperr.wav\"}]}"
-	// syn := Synthesizer{}
+	p.saveLogInfo("Start of the server...")
 
-	p.infoLog.Println("Start of the server...")
+	lId, _ := p.oraConn.GetId()
 
-	lres := false
+	lRes := false
 	if p.pathLibMorf != "" && p.pathResult != "" && p.infoLog != nil && p.errorLog != nil {
 		if p.openLibMorfs() {
 			if p.loadFormula(formu) {
@@ -238,20 +260,22 @@ func (p *Synthesizer) Run(formu string, fname string) bool {
 					if p.assemble() {
 						if p.saveResult == 1 {
 							if p.saveFile(fname) {
-								lres = true
+								lRes = true
 							}
 						} else {
-							lres = true
+							lRes = true
 						}
 					}
 				}
 			}
 		}
 	} else {
-		fmt.Println("!!! Synthesizer wasn't fully inited")
+		p.saveLogError("!!! Synthesizer wasn't fully inited")
 	}
 
-	return lres
+	p.oraConn.SaveRequest(lId, formu, fname, lRes)
+
+	return lRes
 }
 
 /* func test_main() {
