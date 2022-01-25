@@ -1,3 +1,11 @@
+create table WAV_CONCAT_HIST(	
+    id      number, 
+	form    varchar2(4000 byte), 
+	fname   varchar2(4000 byte), 
+	status  number
+);
+/
+
 create or replace function TEST_FUNC (
     action in varchar2
 ) return varchar2 
@@ -21,14 +29,15 @@ begin
         end if;
     
         lc_result.put('res', 'OK');
-        lc_result.put('value', ln_id);        
+        lc_result.put('value', ln_id);  
+
     elsif lc_action = 'save' then
         ln_id      := lj_input_data.get_number('id');
         lc_formula := lower(lj_input_data.get_string('formula'));
         lc_fname   := lower(lj_input_data.get_string('fname'));
         ln_status  := lj_input_data.get_number('status');
         
-        insert into TMP_AAA (
+        insert into WAV_CONCAT_HIST (
             id, form, fname, status
         ) values (
             ln_id, lc_formula, lc_fname, ln_status
@@ -36,9 +45,12 @@ begin
         commit;     
         
         lc_result.put('res', 'OK');
+
     else
-        lc_result.put('res', 'ERROR');       
+        lc_result.put('res', 'ERROR');  
+
     end if;    
    
     return lc_result.to_string();
 end;
+/
