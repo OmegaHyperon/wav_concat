@@ -77,19 +77,23 @@ type Synthesizer struct {
 }
 
 func (p *Synthesizer) saveLogInfo(msg ...string) {
-	if p.infoLog != nil {
-		p.infoLog.Printf("Synthesizer: %q\n", msg)
-	} else {
-		fmt.Printf("Synthesizer: %q\n", msg)
+	for _, item := range msg {
+		if p.infoLog != nil {
+			p.infoLog.Printf("Synthesizer: %q\n", item)
+		} else {
+			fmt.Printf("Synthesizer: %q\n", item)
+		}
 	}
 }
 
 func (p *Synthesizer) saveLogError(msg ...string) {
-	if p.errorLog != nil {
-		p.errorLog.Printf("Synthesizer: %q\n", msg)
-	} else {
-		fmt.Printf("Synthesizer: %q\n", msg)
-	}
+	for _, item := range msg {	
+		if p.errorLog != nil {
+			p.errorLog.Printf("Synthesizer: %q\n", item)
+		} else {
+			fmt.Printf("Synthesizer: %q\n", item)
+		}
+	}		
 }
 
 // Загрузка всех доступных морфем в словарь
@@ -118,20 +122,25 @@ func (p *Synthesizer) loadMorphemes() bool {
 			lres = false
 			break
 		} else {
-			p.saveLogInfo(">>> File is opened: ", idt1["file"].(string))
+			fstat, errFS := fhndl.Stat()
+			fSize := fstat.Size()
+			if errFS != nil {
+				p.saveLogError("!!! Error if File.Stat: " + errFS.Error())
+				fSize = 2048
+			}
+			p.saveLogInfo(fmt.Sprintf(">>> File is opened: %s, %d bytes", idt1["file"].(string), fSize))
 			defer fhndl.Close()
 
 			p.morphemes[idt1["morf"].(string)] = fhndl
-			smpld, errs := wav.NewReader(fhndl).ReadSamples()
+			smpld, errs := wav.NewReader(fhndl).ReadSamples(uint32(fSize))
 			if errs == io.EOF {
 				p.saveLogError("!!! Error of ReadSamples: ", idt1["morf"].(string))
 				lres = false
 				break
 			}
 			p.wavBytes[idt1["morf"].(string)] = smpld
+			p.saveLogInfo(fmt.Sprintf(">>> Morpheme: %s, %d bytes", idt1["morf"].(string), len(smpld)))
 		}
-
-		p.saveLogInfo(fmt.Sprintf(">>> Morphemes: %v", p.morphemes))
 	}
 
 	return lres
@@ -178,13 +187,12 @@ func (p *Synthesizer) loadFormula(formulaJSON string) bool {
 func (p *Synthesizer) assemble() bool {
 	var res_data []wav.Sample
 
-	p.saveLogInfo("Assemble the formula...")
-
 	for _, i_word := range p.formula {
 		res_data = append(res_data, p.wavBytes[i_word]...)
 	}
 
 	p.res = res_data
+	p.saveLogInfo(fmt.Sprintf("Assembled the formula: %d bytes", len(p.res)))
 
 	return true
 }

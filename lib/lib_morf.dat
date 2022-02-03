@@ -2,6 +2,16 @@
     "descr": "lib of morfs", 
     "data": [
         {"morf": "beep", "file": "./beep.wav"}, 
-        {"morf": "beeperr", "file": "./beeperr.wav"}
+        {"morf": "beeperr", "file": "./beeperr.wav"},
+        {"morf": "d0", "file": "./d0.wav"},   
+        {"morf": "d1", "file": "./d1.wav"},  
+        {"morf": "d2", "file": "./d2.wav"},  
+        {"morf": "d3", "file": "./d3.wav"},  
+        {"morf": "d4", "file": "./d4.wav"},  
+        {"morf": "d5", "file": "./d5.wav"},  
+        {"morf": "d6", "file": "./d6.wav"},  
+        {"morf": "d7", "file": "./d7.wav"},  
+        {"morf": "d8", "file": "./d8.wav"},  
+        {"morf": "d9", "file": "./d9.wav"}              
     ]
 }

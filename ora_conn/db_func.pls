@@ -1,7 +1,7 @@
 create table WAV_CONCAT_HIST(	
     id      number, 
 	form    varchar2(4000 byte), 
-	fname   varchar2(4000 byte), 
+	fname   varchar2(400 byte), 
 	status  number
 );
 /

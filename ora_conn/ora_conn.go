@@ -36,6 +36,7 @@ type OraConn struct {
 	Username string
 	Password string
 	Database string
+	FuncName string
 
 	db *sqlx.DB
 
@@ -63,41 +64,16 @@ func (p *OraConn) ConnectToOracle() error {
 	// Организует подключение к Oracle
 
 	p.saveLogInfo(">>> Connect to Oracle...")
-	db, err := sqlx.Connect("godror", p.Username+"/"+p.Password+"@"+p.Database)
+	connStr := fmt.Sprintf("%s/%s@%s", p.Username, p.Password, p.Database)
+	db, err := sqlx.Connect("godror", connStr)
 	if err != nil {
-		msgErr := fmt.Sprintf("Error of connecttion: %s", err)
+		msgErr := fmt.Sprintf("Error of connection: %s", err)
 		p.saveLogError(msgErr)
+
 		return errors.New(msgErr)
 	}
 	// defer db.Close()
-	db.Ping()
-
-	//p.saveLogInfo(">>> Load all rows at once")
-	//sqlStr := "select table_name, tablespace_name from user_tables where 1=1 "
-	//table_recs := []userTablesSql{}
-	//db.Select(&table_recs, sqlStr)
-	//for i, r := range table_recs {
-	//	tn, tsn := r.TABLE_NAME, r.TABLESPACE_NAME
-	//	fmt.Println(i, tn, "/", tsn)
-	//}
-
-	//p.saveLogInfo(">>> Parsing each row separately")
-	//rows, err := db.Queryx(sqlStr)
-	//if err != nil {
-	//	p.saveLogError(fmt.Sprintf("!!! Error processing query: %s", err))
-	//	return errors.New("Error")
-	//}
-	//defer rows.Close()
-
-	//table_rec := userTablesSql{}
-	//for rows.Next() {
-	//	err := rows.StructScan(&table_rec)
-	//	if err != nil {
-	//		fmt.Println(err)
-	//	}
-	//	fmt.Printf("%#v\n", table_rec)
-	//	break
-	//}
+	db.Ping()	
 
 	p.db = db
 	return nil
@@ -138,7 +114,9 @@ func (p *OraConn) GetId() (int64, error) {
 				err = nil
 				if resTmp, errm := dat["value"]; !errm {
 					resInt = -1
-					err = errors.New("!!! Error in getID: Unknown result")
+					msgErrStr := "!!! Error in getID: Unknown result"
+					p.saveLogError(msgErrStr)
+					err = errors.New(msgErrStr)
 				} else {
 					resInt = int64(resTmp.(float64))
 				}
@@ -205,17 +183,17 @@ func (p *OraConn) execAction(action string) (string, error) {
 
 	var retVal string
 	var retErr error
-	query := "BEGIN :retVal := test_func(:action); commit; END;"
+	query := fmt.Sprintf("BEGIN :retVal := %s(:action); commit; END;", p.FuncName)
 
 	stmt, err := p.db.Prepare(query)
 	if err != nil {
-		errMsg := fmt.Sprintf("!!! Error of execution: %s", err)
+		errMsg := fmt.Sprintf("!!! Error of execution: %s\n%s", query, err)
 		p.saveLogError(errMsg)
 		retErr = err
 	} else {
 		defer stmt.Close()
 
-		qres, err := stmt.Exec(
+		_, err := stmt.Exec(
 			sql.Named("action", action),
 			sql.Named("retVal", sql.Out{Dest: &retVal}),
 		)
@@ -224,7 +202,7 @@ func (p *OraConn) execAction(action string) (string, error) {
 			p.saveLogError(errMsg)
 			retErr = err
 		} else {
-			fmt.Println("Res: ", qres, retVal)
+			//fmt.Println("Res: ", qres, retVal)
 
 			var dat map[string]interface{}
 			if err := json.Unmarshal([]byte(retVal), &dat); err != nil {

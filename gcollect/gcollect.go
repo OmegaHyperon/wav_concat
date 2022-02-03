@@ -67,7 +67,7 @@ func (p *GCollect) StartLoop() {
 	p.saveLogInfo("Start of GCollect...")
 
 	for p.Is_stopped == 0 {
-		fmt.Println(">>> .")
+		// fmt.Println(">>> .")
 
 		time.Sleep(time.Duration(p.TimeOut)*time.Millisecond)
 

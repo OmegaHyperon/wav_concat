@@ -1,7 +1,10 @@
 package main
 
+// TODO: Сделать обработку параметра командной строки -с
+
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -9,6 +12,8 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	_ "embed"
+	"strings"
 	"wav_concat/conf_util"
 	"wav_concat/gcollect"
 	"wav_concat/ora_conn"
@@ -17,6 +22,10 @@ import (
 
 	_ "github.com/godror/godror"
 )
+
+//go:embed version
+var version_res string
+var Version string = strings.TrimSpace(version_res)
 
 type tDataReqJSON struct {
 	Formula []string `json:"formula"`
@@ -148,9 +157,19 @@ func (a *application) initPrint() {
 
 // Main
 func main() {
+	iniPathArg := flag.String(
+		"conf",
+		"/usr/local/etc/simple_api_golang/wav_concat_api.ini",
+		"path to ini-file",
+	)
+	flag.Parse()
+
 	appl := application{}
 
-	appl.conf = &conf_util.ConfUtil{}
+	appl.conf = &conf_util.ConfUtil{
+		Ini_path: *iniPathArg,
+		Version: Version,
+	}
 	appl.conf.LoadIniFile()
 
 	f_log, err := os.OpenFile(appl.conf.LogFile, os.O_RDWR|os.O_CREATE, 0666)
@@ -186,14 +205,15 @@ func main() {
 		appl.echoString,
 		appl.dataPost)
 
-	appl.infoLog.Printf(">>> Test of Oracle...")
+	// appl.infoLog.Printf(">>> Test of Oracle...")
 	appl.oraConn = &ora_conn.OraConn{
-		Username: appl.conf.DB_username, 
-		Password: appl.conf.DB_password, 
-		Database: appl.conf.DB_conn, 
-	
+		Username: appl.conf.DB_username,
+		Password: appl.conf.DB_password,
+		Database: appl.conf.DB_conn,
+		FuncName: appl.conf.DB_func_name,
+
 		InfoLog:  appl.infoLog,
-		ErrorLog: appl.errorLog,	
+		ErrorLog: appl.errorLog,
 	}
 	appl.oraConn.ConnectToOracle()
 
@@ -206,23 +226,6 @@ func main() {
 	appl.synthInitData.OraConn = appl.oraConn
 
 	appl.infoLog.Printf("Start of the server...")
-	// appl.errorLog.Printf("No errors at start!")
-
-	// With Mux...
-	// mux := http.NewServeMux()
-	// mux.HandleFunc("/headers", appl.headersString)
-	// mux.HandleFunc("/inc", appl.incrementCounter)
-	// mux.HandleFunc("/rand", appl.randDigit)
-	// mux.HandleFunc("/", appl.echoString)
-
-	// var serv_url string = fmt.Sprintf(":%d", appl.conf.Port)
-	// addr := flag.String("addr", serv_url, "Сетевой адрес веб-сервера")
-	// srv := &http.Server{
-	// 	Addr:     *addr,
-	// 	ErrorLog: appl.errorLog,
-	// 	Handler:  mux,
-	// }
-	// fmt.Println(">>> ", serv_url, appl.conf.Port)
 
 	appl.gcollect = &gcollect.GCollect{
 		Is_stopped: 0,
